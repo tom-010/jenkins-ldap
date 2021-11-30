@@ -1,0 +1,70 @@
+version: '3'
+
+services:
+  reverse-proxy:
+    image: "nginx:latest"
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - certs:/etc/ssl
+      - ./conf/nginx/conf.d:/etc/nginx/conf.d
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    networks:
+      - ci-net
+      - ldap-net
+    depends_on:
+      - ldap
+      - ci
+
+  ci:
+    build: ./jenkins
+    restart: unless-stopped
+    environment:
+      - JENKINS_ADMIN_ID=admin
+      - JENKINS_ADMIN_PASSWORD=admin
+      - LDAP_PASSWORD=secret
+    expose:
+      - '8080'
+    volumes:
+      - jenkins_home:/var/jenkins_home
+    networks:
+      - ci-net
+      - ldap-net
+
+  ldap:
+    image: osixia/openldap
+    restart: unless-stopped
+    expose:
+      - 389
+      - 636
+    environment: # username: cn=admin,dc=example,dc=org
+      - LDAP_ADMIN_PASSWORD=secret
+    volumes:
+      - ldap:/var/lib/ldap
+      - ldap-conf:/etc/ldap/slapd.d
+    networks:
+      - ldap-net
+
+
+  ldap-admin:
+    image: osixia/phpldapadmin
+    restart: unless-stopped
+    expose:
+      - 443
+    environment:
+      - PHPLDAPADMIN_LDAP_HOSTS=ldap
+      - PHPLDAPADMIN_HTTPS=false 
+    networks:
+      - ldap-net
+
+
+networks:
+  ci-net:
+  ldap-net:
+
+volumes:
+  jenkins_home:
+  certs:
+  ldap:
+  ldap-conf:
